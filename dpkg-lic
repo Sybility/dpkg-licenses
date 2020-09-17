@@ -1,0 +1,75 @@
+#!/bin/bash
+#
+WORDTOREMOVE=":armhf"
+
+set -e
+
+case "$1" in
+  --help|-h)
+    cat >&2 <<.e
+Lists all installed packages (dpkg -l similar format) and prints their licenses
+
+Usage: $0
+.e
+    exit 1
+esac
+
+SCRIPTLIB=$(dirname $(readlink -f "$0"))/lib/
+test -d "$SCRIPTLIB"
+
+format='%s\n%-30s\n%-30s\n%s\n%s\n'
+echo "
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
+<html>
+<head>
+        <meta charset="UTF-8"> 
+        <meta name=viewport content="width=device-width, initial-scale=1">
+        <link rel="icon" href="images/favicon.ico" type="image/x-icon">
+        <link rel="stylesheet" type="text/css" href="pilot.css"> 
+        <title>Pilot-X</title>
+</head>
+<style>
+table {
+   border: 1px solid gray;   
+}
+th, td {
+   border: 1px solid gray;
+   padding: 3px;
+   font-family: 'Liberation Sans', Arial, Helvetica, sans-serif;
+   font-size: 90%;
+   text-align: left;
+   vertical-align: top;
+}
+th {
+   background-color: #DDD;
+   font-weight: bold;
+}
+td.sum {
+   width: 5em;
+   text-align: right;
+}
+</style>
+<table class=\"table table-bordered table-hover table-condensed\">
+<thead><tr><th title=\"Field #1\">Name</th>
+<th title=\"Field #2\">Version</th>
+<th title=\"Field #3\">Licenses</th>
+</tr></thead>
+<tbody><tr>"
+
+COLUMNS=2000 dpkg -l | grep '^.[iufhwt]' | while read pState package pVer pArch pDesc; do
+  license=
+  for method in "$SCRIPTLIB"/reader*; do
+    [ -f "$method" ] || continue
+    license=$("$method" "$package")
+    [ $? -eq 0 ] || exit 1
+    [ -n "$license" ] || continue
+    # remove line breaks and spaces
+    license=$(echo "$license" | tr '\n' ' ' | sed -r -e 's/ +/ /g' -e 's/^ +//' -e 's/ +$//')
+    [ -z "$license" ] || break
+  done
+  [ -n "$license" ] || license='Uncategorized License'
+  package=${package//$WORDTOREMOVE/}
+  printf "$format" "<tr>" "<td><a href="doc/${package:0:30}/copyright">${package:0:30}</a></td>" "<td>${pVer:0:30}</td>" "<td>$license</td>" "</tr>"
+done
+echo "
+</html>"
